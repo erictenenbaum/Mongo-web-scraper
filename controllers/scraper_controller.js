@@ -8,6 +8,7 @@ var rp = require('request-promise');
 
 var User = require("../models/Users.js");
 var Article = require("../models/Articles.js");
+var Comment = require("../models/Comments.js")
 
 // If deployed, use the deployed database. Otherwise use the local mongoHeadlines database
 var MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost/mongoHeadlines";
@@ -24,24 +25,19 @@ router.get("/", (req, res) => {
     res.render("index")
 });
 
-router.get("/user/:id?", function(req, res) {
+router.get("/user/:id?", function (req, res) {
     console.log(req.params.id);
 
     db.User.find({ "_id": req.params.id }).then((dbUser) => {
         console.log(dbUser)
-        // if (dbUser[0].saved_articles.length === 0) {
         let name = dbUser[0].name
         console.log(name)
         res.render("noart", { user: name })
-        // } 
     });
 });
 
-
-
 router.post("/user", (req, res) => {
     console.log(req.body)
-
     db.User.find({ "name": req.body.name }).then((dbUser) => {
         console.log(dbUser)
 
@@ -49,280 +45,91 @@ router.post("/user", (req, res) => {
             console.log("new user")
 
             var user = new User(req.body)
-            User.create(user).then((dbNewUser) => {
-                // console.log(dbNewUser)
-                // let name = dbNewUser.name
-                // res.render("noart", {user: name})
-
+            User.create(user).then((dbNewUser) => {  
+                // Send the new user to the front end
                 res.json(dbNewUser)
             }).catch((err) => {
                 console.log(err)
             })
         } else {
             console.log("returning user")
-
-            // if (dbUser[0].saved_articles.length === 0) {
-            // let name = dbUser.name
-            res.json(dbUser[0])
-            // }
+            res.json(dbUser[0])            
         }
     });
 });
 
 // Need to retrieve saved articles here
-router.get("/myarticles", function(req, res){
-    db.Article.find({}).then(function(dbMyArticles){
-        console.log(dbMyArticles)
+router.get("/myarticles", function (req, res) {
+    db.Article.find({}).populate("comments").then(function (dbMyArticles) {       
+        let frontEndArray = []
+        dbMyArticles.forEach(obj => {
+            if (obj.comments.length > 0) {
+                frontEndArray.push(obj)
+            }
+        });
+        res.render("saved", { artArray: frontEndArray })
     })
 })
 
-router.post("/saved", function(req, res){
+router.post("/delete", function (req, res) {
     console.log(req.body)
-
-    Article.create(req.body).then(createdArticle =>{
-        console.log(createdArticle)
+    db.Article.findOneAndRemove({ _id: req.body._id }, function (removed) {
+        console.log(removed)
     })
 })
 
-router.get("/scraper", function(req, res) {
+router.post("/saved", function (req, res) {    
+    db.Comment.create({ title: req.body.title, body: req.body.userComment })
+        .then(function (dbNote) {
+            // If a Note was created successfully, find one Article with an `_id` equal to `req.params.id`. Update the Article to be associated with the new Note
+            // { new: true } tells the query that we want it to return the updated User -- it returns the original by default
+            // Since our mongoose query returns a promise, we can chain another `.then` which receives the result of the query
+            return db.Article.findOneAndUpdate({ _id: req.body.articleId }, { comments: dbNote._id }, { new: true });
+        })
+        .then(function (dbArticle) {
+            // If we were able to successfully update an Article, send it back to the client
+            console.log(dbArticle)
+            res.json(dbArticle);
+        })
+        .catch(function (err) {
+            // If an error occurred, send it to the client
+            res.json(err);
+        });
+});
+
+router.get("/scraper", function (req, res) {
 
     // Making a request for reddit's "webdev" board. The page's HTML is passed as the callback's third argument
-    request("https://www.reddit.com/r/webdev", function(error, response, html) {
+    request("https://www.reddit.com/r/webdev", function (error, response, html) {
 
         // Load the HTML into cheerio and save it to a variable
         // '$' becomes a shorthand for cheerio's selector commands, much like jQuery's '$'
-        var $ = cheerio.load(html);
-
-        // An empty array to save the data that we'll scrape
-        var results = [];
+        var $ = cheerio.load(html);       
 
         // With cheerio, find each p-tag with the "title" class
         // (i: iterator. element: the current element)
-        $("p.title").each(function(i, element) {
+        $("p.title").each(function (i, element) {
 
             // Save the text of the element in a "title" variable
             var title = $(element).text();
 
             // In the currently selected element, look at its child elements (i.e., its a-tags),
             // then save the values for any "href" attributes that the child elements may have
-            var link = $(element).children().attr("href");
+            var link = $(element).children().attr("href");          
 
-            // Save these results in an object that we'll push into the results array we defined earlier
-            results.push({
-                title: title,
-                link: "https://www.reddit.com" + link
-            });
+            Article.findOrCreate({ title: title }, { title: title, link: "https://www.reddit.com" + link },
+                (err, fOrCResults) => {
+                    // New Article:
+                    console.log(fOrCResults);
+                });
+        });     
+
+        db.Article.find({}).then((dbFindAll) => {
+            let HBObj = { artArray: dbFindAll }
+            res.render("articles", HBObj)
         });
-
-        // Log the results once you've looped through each of the elements found with cheerio
-        // console.log(results);
-        // console.log(req.body)
-
-        let HBObj = {
-            id: req.body._id,
-            artArray: results
-        }
-
-        // res.render("articles", HBObj)
-
-        res.render("articles", HBObj)
-
-
     });
-})
-
-
-// Not in use, I need to go back and figure all of this out. 
-router.post("/scrape", (req, res) => {
-
-
-    // let url = "http://www.espn.com/"
-    let url = "http://bleacherreport.com/nfl"
-    rp(url, function(error, response, html) {
-        console.log("hello")
-
-        var $ = cheerio.load(html);
-
-        // Create something with iteration counting to check if increment equals the number of articles checked
-        var results = [];
-
-        // $(".headlineStack__list").each(function(i, element) {
-
-
-
-        $(".organism, .contentStream, .selected").find("li, .cell, .articleSummary").each((i, element) => {
-
-
-            // var link = $(element).find("a").attr("href");
-            // var title = $(element).children().text();
-
-            var title = $(element).find(".atom, .commentary").children().first().text();
-            var link = $(element).find(".articleMedia").children().first().attr("href");
-
-
-
-            if (title == "" || link == undefined) {
-                // console.log("empty")
-
-            } else {
-                results.push({ title, link });
-                // console.log("*************", title)
-                // console.log(link)
-            }
-
-
-
-            // db.Article.find({ "title": title }).then((dbCheckArticle) => {
-            //     if (dbCheckArticle.length === 0) {
-            //         console.log("not found");
-
-            //         let artObj = {
-            //             title,
-            //             link
-            //         }
-
-            //         var article = new Article(artObj);
-
-            //         Article.create(article).then((dbNewArticle) => {
-
-            //         })
-
-            //     } else {
-            //         console.log("article already in database");
-            //     }
-            // })
-
-        })
-
-        // console.log(results);
-
-        // function checkAgainstDB(resArray, cb) {
-
-
-
-        //     var counter = 0
-
-
-        //     for (let i = 0; i < resArray.length; i++) {
-
-        //         db.Article.find({ "link": resArray[i].link }).then((dbCheckArticle) => {
-        //             if (dbCheckArticle.length === 0) {
-        //                 console.log("not found");
-
-        //                 let artObj = {
-        //                     title: resArray[i].title,
-        //                     link: resArray[i].link
-        //                 }
-
-        //                 var article = new Article(artObj);
-
-        //                 Article.create(article).then((dbNewArticle) => {
-        //                         // console.log(dbNewArticle)
-        //                 })
-
-        //             } else {
-        //                 console.log("article already in database");
-        //             }
-        //         })
-        //         // console.log(i);
-
-        //         setTimeout(function(){counter++}, 0)
-
-        //         if(counter + 1 == resArray.length) {
-        //             console.log("continue", counter)
-        //         }
-        //         else {
-        //             console.log("move on")
-        //             setTimeout(cb, 0)
-        //         }
-        //     }
-
-
-
-
-        // }
-
-        // checkAgainstDB(results, function(){
-        //     db.Article.find({}).then(function(cbResult){
-        //         console.log(cbResult)
-        //     })
-        // });
-
-
-        function checkAgainstDB(resArray, cb) {
-            // console.log(resArray)
-
-            db.Article.find({}).then(function(dbResults) {
-                cb(resArray, dbResults)
-            })
-
-
-        }
-
-        function sendToHandleBars(feArray) {
-            console.log("@@@@@@@@@@@@@", feArray.length);
-            // console.log(feArray)
-            // console.log(req.params.id)
-
-
-
-            res.render("articles", feArray)
-        }
-
-        checkAgainstDB(results, function(scrape, db) {
-
-            var displayForFE = [];
-            console.log("*******", scrape.length);
-            console.log("88888888", db.length);
-
-            // db.includes(scrape[i].link)
-
-            let dbTitleArray = []
-
-            db.forEach(function(element) {
-                dbTitleArray.push(element.link)
-            })
-
-            for (let i = 0; i < scrape.length; i++) {
-
-                if (dbTitleArray.includes(scrape[i].link)) {
-                    console.log("includes");
-                    displayForFE.push(db[i])
-
-                } else {
-
-                    var article = new Article(scrape[i]);
-
-                    Article.create(article).then(function(dbCreateArt) {
-                        console.log("added to database")
-                    })
-                    displayForFE.push(scrape[i]);
-                }
-            }
-
-            if (db.length !== displayForFE.length) {
-                console.log("missing some")
-
-                // Need to add remaining database articles that were not included in the scrape       
-
-            } else {
-                console.log("got everything")
-            }
-
-            sendToHandleBars(displayForFE);
-
-
-        });
-
-
-    }).then(() => {
-
-        // console.log(results)
-        res.json(req.body)
-
-
-    })
-})
+});
 
 router.get("/articles/:id?", (req, res) => {
     userFEObj = {
@@ -331,16 +138,13 @@ router.get("/articles/:id?", (req, res) => {
         all_articles: []
     }
     db.Article.find({}).populate("comments").then((dbFoundArt) => {
-        // console.log(dbFoundArt);
-    })
+        console.log(dbFoundArt);
+    });
 
     res.render("articles")
 
 
-})
-
-
-
+});
 
 module.exports = router;
 

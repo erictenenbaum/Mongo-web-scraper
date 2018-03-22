@@ -1,0 +1,31 @@
+<div class="jumbotron">
+    <h1>Saved Articles!</h1>
+    <p>Please click the buttom below to curate the latest sports articles</p>
+    <p><a class="scrape-btn btn btn-primary btn-lg" role="button" href="/scraper">Get New Articles!</a></p>
+</div>  
+
+<ul class="list-group">
+
+{{#each artArray}}
+
+<div class="row">
+  <div class="col-sm-6 col-md-4">
+    <div class="thumbnail">
+      <img src="https://d3irk3g7luh32r.cloudfront.net/wp-content/uploads/sites/5/2017/12/20170301155447.jpg" style='width: 300px; margin:20px auto auto auto; border-radius: 10px' alt="...">
+      <div class="caption">
+        <h3>{{this.title}}</h3>
+        <p><a href="{{this.link}}" class="btn btn-primary" role="button">Link</a>
+        <a href="/myarticles" class="delete-btn btn btn-danger" data-id="{{this._id}}" role="button">Delete</a></p>
+        <p><strong>Most Recent Comment:</strong> </p>
+        {{#each this.comments}}
+            <p>{{this.body}}</p>
+        {{/each}}
+      </div>
+    </div>
+  </div>
+</div>
+
+{{/each}}
+
+</ul>
+ <p><a class="scrape-btn btn btn-primary btn-lg" role="button" href="/scraper">Get New Articles!</a></p>

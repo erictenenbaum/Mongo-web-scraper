@@ -1,4 +1,7 @@
-<h1> Hello! {{id}} </h1>
+<div class="jumbotron">
+    <h1>New Articles!</h1>  
+    <p><a class="scrape-btn btn btn-primary btn-lg" role="button" href="/myarticles">Retrieve Saved Articles!</a></p>
+</div>
 
 <ul class="list-group">
 
@@ -11,7 +14,9 @@
       <div class="caption">
         <h3>{{this.title}}</h3>
         <p>Click on the Links Below!</p>
-        <p><a href="{{this.link}}" class="btn btn-primary" role="button">Link</a> <a href="#" class="comment-btn btn btn-default" role="button">Comment</a><a href="#" class="save-btn btn btn-default" data-title="{{this.title}}" data-link="{{this.link}}" role="button">Save</a></p>
+        <p><a href="{{this.link}}" class="btn btn-primary" role="button">Link</a> 
+        {{!-- <a href="#" class="comment-btn btn btn-default" role="button">Comment</a> --}}
+        <a href="#" class="comment-btn btn btn-default" data-title="{{this.title}}" data-link="{{this.link}}" data-id="{{this._id}}" role="button">Save</a></p>
       </div>
     </div>
   </div>
@@ -20,6 +25,10 @@
 {{/each}}
 
 </ul>
+
+<p><a class="scrape-btn btn btn-primary btn-lg" role="button" href="/myarticles">Retrieve Saved Articles!</a></p>
+
+
 
 
 <div class="modal fade" id="commentModal" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
